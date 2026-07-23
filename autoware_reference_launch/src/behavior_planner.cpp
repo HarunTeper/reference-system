@@ -12,12 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <chrono>
+#include <cstdint>
 #include <functional>
 
 #include "rclcpp/rclcpp.hpp"
 #include "reference_interfaces/msg/message4kb.hpp"
 
 using namespace std::chrono_literals;
+
+// Workload replicated from reference_system/number_cruncher.hpp (Apex.AI,
+// Apache-2.0): count primes below maximum_number by trial division.
+template<typename Tp>
+inline void escape(Tp const & value)
+{
+  asm volatile ("" : : "g" (value) : "memory");
+}
+
+static inline int64_t number_cruncher(const uint64_t maximum_number)
+{
+  int64_t number_of_primes = 0;
+  uint64_t initial_value = 2;
+  if (maximum_number <= initial_value) {
+    return 2;
+  }
+  for (uint64_t i = initial_value; i <= maximum_number; ++i) {
+    bool is_prime = true;
+    for (uint64_t n = initial_value; n < i; ++n) {
+      if (i % n == 0) {
+        is_prime = false;
+        break;
+      }
+    }
+    escape(is_prime);
+    if (is_prime) {
+      ++number_of_primes;
+    }
+  }
+  return number_of_primes;
+}
 
 class BehaviorPlanner : public rclcpp::Node
 {
@@ -51,6 +83,8 @@ public:
 private:
   void timer_callback()
   {
+    auto crunch_result = number_cruncher(4096);
+    escape(crunch_result);
     auto msg = publisher_->borrow_loaned_message();
     publisher_->publish(std::move(msg));
   }
